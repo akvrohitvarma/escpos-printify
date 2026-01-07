@@ -1,0 +1,21 @@
+services:
+  escpos-printify:
+    build: .
+    container_name: escpos-printify
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - PRINTER_HOST=192.168.192.168  # Change to your printer IP
+      - PRINTER_PORT=9100
+      - IMAGE_WIDTH=512
+      - PRINTER_TIMEOUT=10000
+      - RATE_LIMIT_MAX=30
+      - RATE_LIMIT_WINDOW=60000
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
