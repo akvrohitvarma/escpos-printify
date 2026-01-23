@@ -1,14 +1,28 @@
+# ESC/POS Printify - Docker Compose
+# 
+# Quick start:
+#   1. Edit PRINTER_HOST below to match your printer's IP
+#   2. Run: docker compose up -d
+#   3. Open: http://localhost:3000
+#
+# To rebuild after code changes:
+#   docker compose build --no-cache
+#   docker compose up -d
+
 services:
   escpos-printify:
     build: .
+    image: akvrohitvarma/escpos-printify:latest
     container_name: escpos-printify
     restart: unless-stopped
     ports:
       - "3000:3000"
     environment:
-      - PORT=3000
-      - PRINTER_HOST=192.168.192.168  # Change to your printer IP
+      # REQUIRED: Change to your printer's IP address
+      - PRINTER_HOST=192.168.1.100
       - PRINTER_PORT=9100
+      # Server settings
+      - PORT=3000
       - IMAGE_WIDTH=512
       - PRINTER_TIMEOUT=10000
       - RATE_LIMIT_MAX=30
@@ -18,4 +32,4 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 10s
+      start_period: 15s

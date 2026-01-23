@@ -1,5 +1,6 @@
 require('dotenv').config();
 const express = require('express');
+const path = require('path');
 const puppeteer = require('puppeteer');
 const escpos = require('escpos');
 const rateLimit = require('express-rate-limit');
@@ -7,6 +8,9 @@ const QRCode = require('qrcode');
 escpos.Network = require('escpos-network');
 
 const app = express();
+
+// Serve static frontend files (built Vite app)
+app.use(express.static(path.join(__dirname, 'web', 'dist')));
 
 // Configuration from .env
 const CONFIG = {
