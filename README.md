@@ -1,67 +1,40 @@
-# 🖨️ ESC/POS Printify
+# ESC/POS Printify
 
-A complete receipt printing solution with a beautiful web interface. Print notes, QR codes, grocery lists, reminders, banners, and more to any network thermal receipt printer.
+Turn any thermal receipt printer into a smart notification printer. Send structured data via API, get beautiful printed receipts -- reminders, lists, QR codes, images, and more.
 
-![License](https://img.shields.io/badge/license-MIT-blue.svg)
-![Node](https://img.shields.io/badge/node-%3E%3D18-green.svg)
-![Docker](https://img.shields.io/badge/docker-ready-blue.svg)
+Think of it as **ntfy.sh, but for paper**. Automate reminders, shopping lists, daily agendas, or anything else you want printed on a receipt.
 
 ---
 
-## 📋 Table of Contents
+## What It Does
 
-- [Features](#-features)
-- [Requirements](#-requirements)
-- [Quick Start](#-quick-start)
-- [Installation](#-installation)
-  - [Option 1: Docker (Recommended)](#option-1-docker-recommended)
-  - [Option 2: Manual Installation](#option-2-manual-installation)
-- [Configuration](#-configuration)
-- [Using the Web Interface](#-using-the-web-interface)
-- [API Documentation](#-api-documentation)
-  - [Print Endpoint](#print-endpoint)
-  - [Health Check](#health-check)
-  - [Template Reference](#template-reference)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
+You send a JSON payload to the server. The server renders it into a black-and-white dithered image optimized for thermal printers, then prints it.
 
----
+```
+Your App / Automation / cURL
+        |
+        v  POST /print  (JSON payload)
+   +--------------+
+   |  server.js   |  Express server
+   |              |
+   |  templates   |  Generates Satori-compatible HTML
+   |  renderer    |  HTML -> SVG -> PNG -> Dithered B&W
+   |  printer     |  Sends ESC/POS commands over network/USB
+   +------+-------+
+          |
+          v  Port 9100 (RAW)
+   +--------------+
+   |   Printer    |  Any ESC/POS thermal printer
+   +--------------+
+```
 
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 🎨 **Beautiful Web UI** | Modern, responsive interface for creating prints |
-| 📝 **6 Templates** | Post-it, Reminder, Grocery, QR Code, Banner, Image |
-| 📱 **6 QR Code Types** | URL, Text, Email, SMS, WiFi, vCard |
-| 🖼️ **Image Printing** | Upload and print images with dithering |
-| 🔗 **REST API** | Simple JSON API for automation |
-| 🐳 **Docker Ready** | One-command deployment |
-| ⚡ **Fast** | Server-side rendering for efficiency |
+It also has a **web UI** at `http://localhost:3000` where you can pick templates, customize fields, preview, and print -- no terminal needed.
 
 ---
 
-## 📦 Requirements
+## Quick Start
 
-### Hardware
-- **Thermal Receipt Printer** with network connectivity (Ethernet/WiFi)
-  - Common brands: Epson TM-T20, Star TSP, Xprinter, etc.
-  - Must support ESC/POS protocol (most do)
-  - Must be connected to your network (not USB)
-
-### Software
-- **Node.js 18+** (for manual installation)
-- **Docker** (for containerized deployment)
-
-### Network
-- Printer and server must be on the same network
-- Know your printer's IP address (usually found in printer settings or network config)
-
----
-
-## 🚀 Quick Start
-
-### Using Docker (Fastest)
+### Option 1: Docker (recommended)
 
 ```bash
 docker run -d \
@@ -75,234 +48,203 @@ Replace `192.168.1.100` with your printer's IP address.
 
 Open `http://localhost:3000` in your browser.
 
+### Option 2: Docker Compose
+
+```bash
+git clone https://github.com/AKVorrat/escpos-printify.git
+cd escpos-printify
+```
+
+Edit `docker-compose.yml` and set `PRINTER_HOST` to your printer's IP, then:
+
+```bash
+docker compose up -d
+```
+
+### Option 3: Run Locally (no Docker)
+
+**Requirements:** Node.js 20+, a thermal printer on your network.
+
+```bash
+git clone https://github.com/AKVorrat/escpos-printify.git
+cd escpos-printify
+
+# Install backend dependencies
+npm install
+
+# Install and build the web frontend
+cd web && npm install && npm run build && cd ..
+
+# Configure your printer IP
+cp .env.example .env
+# Edit .env and set PRINTER_HOST to your printer's IP
+
+# Start the server
+npm start
+```
+
+Open `http://localhost:3000`.
+
 ---
 
-## 📥 Installation
+## Configuration
 
-### Option 1: Docker (Recommended)
+All settings are configured via environment variables (or the `.env` file):
 
-#### Step 1: Install Docker
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | `3000` | Server port |
+| `PRINTER_HOST` | `192.168.1.100` | Your printer's IP address |
+| `PRINTER_PORT` | `9100` | Printer RAW port (almost always 9100) |
+| `IMAGE_WIDTH` | `512` | Print width in pixels. `384` for 58mm paper, `512` for 80mm paper |
+| `PRINTER_TIMEOUT` | `10000` | Connection timeout in milliseconds |
+| `RATE_LIMIT_MAX` | `30` | Max print requests per window |
+| `RATE_LIMIT_WINDOW` | `60000` | Rate limit window in ms (default: 1 minute) |
+| `MAX_CONCURRENT_RENDERS` | `3` | Max simultaneous renders (prevents memory exhaustion) |
+| `API_KEY` | *(empty)* | If set, all print/preview requests require this key |
+| `CORS_ORIGINS` | *(empty)* | Comma-separated allowed origins. Empty = localhost only |
 
-**Windows:**
-1. Download [Docker Desktop](https://www.docker.com/products/docker-desktop/)
-2. Run the installer
-3. Restart your computer
-4. Open Docker Desktop
+---
 
-**Mac:**
-1. Download [Docker Desktop for Mac](https://www.docker.com/products/docker-desktop/)
-2. Drag to Applications folder
-3. Open Docker Desktop
+## Using the Web UI
 
-**Linux (Ubuntu/Debian):**
-```bash
-curl -fsSL https://get.docker.com | sh
-```
+1. Open `http://localhost:3000` in your browser
+2. Pick a template from the grid (Post-it, Reminder, QR Code, etc.)
+3. Fill in the fields on the left
+4. See the live preview on the right
+5. Click **Print Receipt**
 
-#### Step 2: Find Your Printer's IP Address
+The **Settings** panel (gear icon, top-right) lets you:
+- Enter an **API Key** if the server requires one
+- Switch between **Network** and **USB** printer connections
 
-Your printer needs to be connected to your network. To find its IP:
+---
 
-1. **Print a network config page** from your printer (usually hold feed button while powering on)
-2. **Check your router's** connected devices list
-3. **Use a network scanner** app like "Fing" on your phone
+## API Reference
 
-Example: `192.168.1.100`
+The server exposes a REST API so you can print from any language, script, or automation tool. All print requests are `POST` with a JSON body.
 
-#### Step 3: Run the Container
+### Base URL
 
-```bash
-docker run -d \
-  --name escpos-printify \
-  -p 3000:3000 \
-  -e PRINTER_HOST=192.168.1.100 \
-  -e PRINTER_PORT=9100 \
-  akvrohitvarma/escpos-printify:latest
-```
-
-#### Step 4: Open the Web Interface
-
-Open your browser and go to:
 ```
 http://localhost:3000
 ```
 
-You should see the ESC/POS Printify web interface!
+### Authentication
+
+If `API_KEY` is set on the server, include it as a header in every request:
+
+```
+x-api-key: your-secret-key-here
+```
+
+If `API_KEY` is not set, no authentication is needed.
 
 ---
 
-### Option 2: Manual Installation
+### `POST /print` -- Print a receipt
 
-#### Step 1: Install Node.js
-
-**Windows:**
-1. Download [Node.js](https://nodejs.org/) (LTS version)
-2. Run the installer
-3. Open Command Prompt and verify: `node --version`
-
-**Mac:**
-```bash
-brew install node
-```
-
-**Linux:**
-```bash
-curl -fsSL https://deb.nodesource.com/setup_18.x | sudo bash -
-sudo apt-get install -y nodejs
-```
-
-#### Step 2: Clone the Repository
-
-```bash
-git clone https://github.com/akvrohitvarma/escpos-printify.git
-cd escpos-printify
-```
-
-#### Step 3: Install Dependencies
-
-```bash
-# Install backend dependencies
-npm install
-
-# Install frontend dependencies
-cd web
-npm install
-cd ..
-```
-
-#### Step 4: Configure the Printer
-
-Create a `.env` file in the project root:
-
-```bash
-# Copy the example
-cp .env.example .env
-```
-
-Edit `.env` with your settings:
-
-```env
-# Your printer's IP address (REQUIRED)
-PRINTER_HOST=192.168.1.100
-
-# Printer port (usually 9100)
-PRINTER_PORT=9100
-
-# Server port
-PORT=3000
-```
-
-#### Step 5: Start the Server
-
-**Development mode (with hot reload):**
-```bash
-# Terminal 1: Start backend
-node server.js
-
-# Terminal 2: Start frontend
-cd web
-npm run dev
-```
-
-**Production mode:**
-```bash
-# Build frontend
-cd web
-npm run build
-cd ..
-
-# Add static serving to server (or use nginx)
-node server.js
-```
-
----
-
-## ⚙️ Configuration
-
-All configuration is done via environment variables:
-
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PRINTER_HOST` | `192.168.1.100` | **Your printer's IP address** |
-| `PRINTER_PORT` | `9100` | Printer port (rarely needs changing) |
-| `PORT` | `3000` | Web server port |
-| `IMAGE_WIDTH` | `512` | Print width in pixels (58mm ≈ 384px, 80mm ≈ 512px) |
-| `PRINTER_TIMEOUT` | `10000` | Connection timeout in milliseconds |
-| `RATE_LIMIT_MAX` | `30` | Maximum prints per minute |
-| `RATE_LIMIT_WINDOW` | `60000` | Rate limit window in milliseconds |
-
-### Setting Environment Variables
-
-**Docker:**
-```bash
-docker run -e PRINTER_HOST=192.168.1.100 -e PORT=3000 ...
-```
-
-**Manual (.env file):**
-```env
-PRINTER_HOST=192.168.1.100
-PORT=3000
-```
-
----
-
-## 🖥️ Using the Web Interface
-
-### 1. Choose a Template
-
-Click on any template icon in the grid:
-
-| Icon | Template | Description |
-|------|----------|-------------|
-| 📝 | Post-it | Simple notes with title and message |
-| ⏰ | Reminder | Tasks with flags, dates, and optional QR |
-| 🛒 | Grocery | Shopping list with checkboxes |
-| 📲 | QR Code | 6 types: URL, Text, Email, SMS, WiFi, vCard |
-| 🖼️ | Image | Upload and print any image |
-| 📜 | Banner | Large text printed vertically |
-
-### 2. Customize Your Print
-
-Fill in the form fields that appear. Each template has different options.
-
-### 3. Preview
-
-The right panel shows a live preview of exactly what will print.
-
-### 4. Print!
-
-Click the **Print Receipt** button. The printer will produce your output!
-
----
-
-## 📡 API Documentation
-
-The server provides a REST API for automation and integration.
-
-### Print Endpoint
-
-**URL:** `POST /print`
+Renders the template and sends it to the printer.
 
 **Headers:**
 ```
 Content-Type: application/json
+x-api-key: your-key          (only if API_KEY is configured)
 ```
 
-**Base Request Body:**
+**Body fields (common to all templates):**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `template` | string | Yes | Template name (see below) |
+| `copies` | number | No | Number of copies, 1-10. Default: `1` |
+
+**Success response:**
+```json
+{ "success": true, "template": "postit", "copies": 1 }
+```
+
+**Error response:**
+```json
+{ "success": false, "error": "Description of what went wrong" }
+```
+
+---
+
+### `POST /preview` -- Get a PNG preview (no printing)
+
+Same body as `/print`. Returns a PNG image instead of printing.
+
+```bash
+curl -X POST http://localhost:3000/preview \
+  -H "Content-Type: application/json" \
+  -d '{"template":"postit","title":"Hello","body":"World"}' \
+  --output preview.png
+```
+
+Open `preview.png` to see exactly what would be printed.
+
+---
+
+### `GET /health` -- Health check
+
+```bash
+curl http://localhost:3000/health
+```
+
+Returns:
 ```json
 {
-  "template": "postit",
-  "copies": 1
+  "status": "ok",
+  "printerHost": "192.168.0.5",
+  "printerType": "network",
+  "usbSupported": false
 }
 ```
 
 ---
 
-### Template Reference
+### `GET /config` -- Server configuration
 
-#### 📝 Post-it Note
+```bash
+curl http://localhost:3000/config
+```
 
-Simple note with title and message.
+Returns:
+```json
+{
+  "imageWidth": 512,
+  "printerHost": "192.168.0.5",
+  "printerPort": 9100,
+  "usbSupported": false,
+  "authRequired": false
+}
+```
+
+---
+
+### `GET /printers/usb` -- List USB printers
+
+```bash
+curl http://localhost:3000/printers/usb
+```
+
+Returns a list of detected USB printers with vendor/product IDs.
+
+---
+
+## Templates
+
+Below is every template the server supports, with all fields and copy-paste examples.
+
+### 1. Post-it Note (`postit`)
+
+A simple note with a title and message.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | No | Heading. Default: `"Note"` |
+| `body` | string | No | Message text |
 
 ```bash
 curl -X POST http://localhost:3000/print \
@@ -310,55 +252,71 @@ curl -X POST http://localhost:3000/print \
   -d '{
     "template": "postit",
     "title": "Remember!",
-    "body": "Pick up groceries on the way home"
+    "body": "Pick up groceries after work"
   }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | Yes | Note title |
-| `body` | string | Yes | Note content |
-
 ---
 
-#### ⏰ Reminder
+### 2. Reminder (`reminder`)
 
-Task reminder with priority flags and optional deadline.
+A task reminder with optional priority flag, finish-by date, and QR code.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | No | Reminder title |
+| `body` | string | No | Description text |
+| `flag` | string | No | Priority: `"urgent"`, `"important"`, `"emergency"`, `"custom"`, `"none"` |
+| `customFlag` | string | No | Custom flag text (only when `flag` is `"custom"`) |
+| `showPrintedAt` | boolean | No | Show print timestamp. Default: `true` |
+| `showFinishBy` | boolean | No | Show deadline. Default: `false` |
+| `finishByDate` | string | No | Deadline date in `YYYY-MM-DD` format |
+| `finishByTime` | string | No | Deadline time in `HH:MM` format (24-hour) |
+| `showQrCode` | boolean | No | Include a QR code. Default: `false` |
+| `qrType` | string | No | QR content type (see QR Code template for types) |
+| `qrData` | object | No | QR content fields (see QR Code template for fields) |
 
 ```bash
+# Simple urgent reminder with a deadline
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{
     "template": "reminder",
     "title": "Submit Report",
-    "body": "Complete the quarterly financial report",
+    "body": "Complete quarterly report and send to manager",
     "flag": "urgent",
     "showPrintedAt": true,
     "showFinishBy": true,
-    "finishByDate": "2026-01-25",
+    "finishByDate": "2026-04-05",
     "finishByTime": "17:00"
   }'
 ```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `title` | string | Yes | - | Reminder title |
-| `body` | string | Yes | - | Reminder description |
-| `flag` | string | No | `none` | Priority: `urgent`, `important`, `emergency`, `custom`, `none` |
-| `customFlag` | string | No | - | Custom flag text (when flag=custom) |
-| `showPrintedAt` | boolean | No | `true` | Show print timestamp |
-| `showFinishBy` | boolean | No | `false` | Show deadline |
-| `finishByDate` | string | No | - | Deadline date (YYYY-MM-DD) |
-| `finishByTime` | string | No | - | Deadline time (HH:MM) |
-| `showQrCode` | boolean | No | `false` | Include QR code |
-| `qrType` | string | No | `url` | QR type (see QR Code section) |
-| `qrData` | object | No | - | QR data (see QR Code section) |
+```bash
+# Reminder with a QR code link
+curl -X POST http://localhost:3000/print \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "reminder",
+    "title": "Team Meeting",
+    "body": "Join via the link below",
+    "flag": "important",
+    "showQrCode": true,
+    "qrType": "url",
+    "qrData": {"url": "https://meet.google.com/abc-defg-hij"}
+  }'
+```
 
 ---
 
-#### 🛒 Grocery List
+### 3. Grocery List (`grocery`)
 
-Shopping list with checkboxes.
+A checklist with empty checkboxes -- great for shopping lists or to-do lists.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | No | List heading. Default: `"Shopping List"` |
+| `items` | string[] | Yes | Array of item names |
 
 ```bash
 curl -X POST http://localhost:3000/print \
@@ -366,37 +324,56 @@ curl -X POST http://localhost:3000/print \
   -d '{
     "template": "grocery",
     "title": "Weekend Shopping",
-    "items": ["Milk", "Bread", "Eggs", "Butter", "Cheese", "Apples"]
+    "items": ["Milk", "Bread", "Eggs", "Butter", "Cheese", "Tomatoes"]
   }'
 ```
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `title` | string | No | List title (default: "Shopping List") |
-| `items` | array | Yes | Array of item strings |
-
 ---
 
-#### 📲 QR Code
+### 4. Banner (`banner`)
 
-Generate and print QR codes. Supports 6 types.
+Giant vertical text -- each character printed huge, one per line. Great for signs or labels.
 
-**URL QR Code:**
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `title` | string | No | Text to display. Default: `"HELLO"` |
+| `fontSize` | string | No | Size in pixels: `"200"`, `"300"`, `"400"`, `"500"`. Default: `"400"` |
+
 ```bash
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{
-    "template": "qrcode",
-    "qrType": "url",
-    "qrLabel": "Visit Our Website",
-    "qrData": {
-      "url": "https://example.com"
-    }
+    "template": "banner",
+    "title": "SALE",
+    "fontSize": "500"
   }'
 ```
 
-**WiFi QR Code:**
+---
+
+### 5. QR Code (`qrcode`)
+
+Generate and print a QR code. Supports 6 content types.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `qrType` | string | Yes | One of: `"url"`, `"text"`, `"email"`, `"sms"`, `"wifi"`, `"vcard"` |
+| `qrLabel` | string | No | Text printed below the QR code |
+| `qrData` | object | Yes | Content fields (depends on `qrType`, see table below) |
+
+**`qrData` fields by type:**
+
+| qrType | Fields | Example |
+|--------|--------|---------|
+| `url` | `url` | `{"url": "https://example.com"}` |
+| `text` | `text` | `{"text": "Hello World"}` |
+| `email` | `to`, `subject`, `body` | `{"to": "a@b.com", "subject": "Hi", "body": "Hello"}` |
+| `sms` | `phone`, `message` | `{"phone": "+1234567890", "message": "Hey!"}` |
+| `wifi` | `ssid`, `password`, `security` | `{"ssid": "MyWiFi", "password": "pass123", "security": "WPA"}` |
+| `vcard` | `name`, `phone`, `email`, `org` | `{"name": "John", "phone": "+123", "email": "j@b.com"}` |
+
 ```bash
+# WiFi QR code -- guests scan to connect
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{
@@ -404,173 +381,206 @@ curl -X POST http://localhost:3000/print \
     "qrType": "wifi",
     "qrLabel": "Guest WiFi",
     "qrData": {
-      "ssid": "MyNetwork",
-      "password": "secret123",
+      "ssid": "CoffeeShop",
+      "password": "welcome123",
       "security": "WPA"
     }
   }'
 ```
 
-**vCard (Contact) QR Code:**
 ```bash
+# Contact card QR code
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{
     "template": "qrcode",
     "qrType": "vcard",
-    "qrLabel": "My Contact",
+    "qrLabel": "Scan to Save Contact",
     "qrData": {
-      "name": "John Doe",
+      "name": "Jane Smith",
       "phone": "+1234567890",
-      "email": "john@example.com",
-      "org": "Acme Inc"
+      "email": "jane@example.com",
+      "org": "Acme Corp"
     }
   }'
 ```
 
-**QR Data Fields by Type:**
-
-| qrType | qrData Fields |
-|--------|---------------|
-| `url` | `{ url: "https://..." }` |
-| `text` | `{ text: "Hello World" }` |
-| `email` | `{ to: "email@...", subject: "...", body: "..." }` |
-| `sms` | `{ phone: "+123...", message: "..." }` |
-| `wifi` | `{ ssid: "NetworkName", password: "...", security: "WPA/WEP/nopass" }` |
-| `vcard` | `{ name: "...", phone: "...", email: "...", org: "..." }` |
-
 ---
 
-#### 🖼️ Image
+### 6. Image (`image`)
 
-Print an uploaded image.
-
-```bash
-curl -X POST http://localhost:3000/print \
-  -H "Content-Type: application/json" \
-  -d '{
-    "template": "image",
-    "image": "data:image/png;base64,iVBORw0KGgo...",
-    "caption": "Company Logo"
-  }'
-```
+Print any image (photo, screenshot, diagram). The server resizes, dithers, and optimizes it for thermal paper automatically.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
-| `image` | string | Yes | Base64 data URL of image |
-| `caption` | string | No | Caption below image |
+| `image` | string | Yes | Base64 data URL (e.g. `data:image/png;base64,...`) |
+| `caption` | string | No | Text printed below the image |
+
+```bash
+# Convert a local file to base64 and print it
+IMAGE_B64=$(base64 -i photo.jpg)
+curl -X POST http://localhost:3000/print \
+  -H "Content-Type: application/json" \
+  -d "{
+    \"template\": \"image\",
+    \"image\": \"data:image/jpeg;base64,${IMAGE_B64}\",
+    \"caption\": \"Vacation photo\"
+  }"
+```
+
+**Size limit:** 5MB max image size (after base64 encoding).
 
 ---
 
-#### 📜 Banner
+### 7. Tic Tac Toe (`tictactoe`)
 
-Large text printed vertically for banners.
+Prints a blank 3x3 grid. No fields needed.
+
+```bash
+curl -X POST http://localhost:3000/print \
+  -H "Content-Type: application/json" \
+  -d '{"template": "tictactoe"}'
+```
+
+---
+
+### 8. Sudoku (`sudoku`)
+
+Prints a puzzle grid with the solution printed below it.
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `difficulty` | string | No | `"easy"`, `"medium"`, `"hard"`, `"expert"`. Default: `"medium"` |
+| `puzzle` | string | Yes | 81-character string. Digits for filled cells, `-` for blanks |
+| `solution` | string | Yes | 81-character string. All digits |
+
+The web UI generates puzzles automatically. For API use, generate the puzzle and solution strings yourself or use a library like `sudoku-gen`.
 
 ```bash
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{
-    "template": "banner",
-    "title": "SALE TODAY",
-    "fontSize": "400"
+    "template": "sudoku",
+    "difficulty": "easy",
+    "puzzle":    "53--7----6--195----98----6-8---6---34--8-3--17---2---6-6----28----419--5----8--79",
+    "solution":  "534678912672195348198342567859761423426853791713924856961537284287419635345286179"
   }'
 ```
 
-| Field | Type | Required | Default | Description |
-|-------|------|----------|---------|-------------|
-| `title` | string | Yes | - | Banner text (spaces create word breaks) |
-| `fontSize` | string | No | `400` | Font size: `200`, `300`, `400`, `500` |
 ---
 
-### Health Check
+### Printing Multiple Copies
 
-Check if the server is running and printer is configured.
+Add `"copies": N` to any template (max 10):
 
 ```bash
-curl http://localhost:3000/health
-```
-
-**Response:**
-```json
-{
-  "status": "ok",
-  "printerHost": "192.168.1.100",
-  "browserConnected": true
-}
-```
-
----
-
-### Response Format
-
-**Success:**
-```json
-{
-  "success": true,
-  "template": "postit",
-  "copies": 1
-}
-```
-
-**Error:**
-```json
-{
-  "success": false,
-  "error": "Printer connection failed: ETIMEDOUT"
-}
+curl -X POST http://localhost:3000/print \
+  -H "Content-Type: application/json" \
+  -d '{
+    "template": "postit",
+    "title": "Batch Print",
+    "body": "This prints 3 copies",
+    "copies": 3
+  }'
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## Automation Examples
 
-### "Printer connection failed"
+### Print a daily reminder with cron
 
-1. **Check printer IP:** Make sure `PRINTER_HOST` matches your printer
-2. **Check network:** Printer and server must be on same network
-3. **Check port:** Most printers use 9100, some use 515 or 631
-4. **Ping test:** `ping 192.168.1.100` (use your printer's IP)
+```bash
+# Add to crontab (run: crontab -e)
+# This prints every weekday at 9:00 AM
+0 9 * * 1-5 curl -s -X POST http://localhost:3000/print \
+  -H "Content-Type: application/json" \
+  -d '{"template":"reminder","title":"Daily Standup","body":"Join the team call at 9:15","flag":"important"}'
+```
+
+### Print from Python
+
+```python
+import requests
+
+requests.post("http://localhost:3000/print", json={
+    "template": "reminder",
+    "title": "Server Alert",
+    "body": "CPU usage above 90% on prod-web-01",
+    "flag": "emergency"
+})
+```
+
+### Print from JavaScript (Node.js)
+
+```javascript
+await fetch("http://localhost:3000/print", {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({
+    template: "grocery",
+    title: "Today's Tasks",
+    items: ["Review PRs", "Deploy staging", "Update docs"]
+  })
+});
+```
+
+### Integrate with Home Assistant, n8n, or any webhook
+
+Point any webhook or automation tool at `http://<your-server-ip>:3000/print` with a JSON body. That's all it takes.
+
+---
+
+## Project Structure
+
+```
+escpos-printify/
+|-- server.js              # Express server -- routes, middleware, entry point
+|-- lib/
+|   |-- templates.js       # HTML generators for each template type
+|   |-- renderer.js        # HTML -> SVG -> PNG -> dithered image pipeline
+|   |-- printer.js         # ESC/POS protocol -- sends images to printer
+|   +-- security.js        # Input validation, sanitization, auth, CORS
+|-- web/                   # React + Vite frontend
+|   |-- src/App.jsx        # Main UI component
+|   +-- dist/              # Built production bundle (served by Express)
+|-- .env.example           # Configuration template
+|-- Dockerfile             # Multi-stage Docker build
+|-- docker-compose.yml     # One-command deployment
++-- test-payloads.md       # Copy-paste curl examples for every template
+```
+
+---
+
+## Printer Compatibility
+
+Works with any thermal receipt printer that supports the ESC/POS protocol over:
+
+- **Network (LAN):** Most common. Printer connects to your router, server sends data to port 9100.
+- **USB:** Requires the `escpos-usb` package and native USB libraries. Docker USB passthrough is Linux-only.
+
+Tested with 80mm and 58mm paper widths. Set `IMAGE_WIDTH=384` for 58mm paper.
+
+---
+
+## Troubleshooting
+
+### "Printer connection failed: connect EHOSTUNREACH"
+- Verify the printer IP: can you open `http://<printer-ip>` in your browser?
+- Check that port 9100 is open: `nc -zv <printer-ip> 9100`
+- On macOS, you may need to run `sudo npm start` for raw socket access
 
 ### "Rate limit exceeded"
+- Default is 30 prints per minute. Increase `RATE_LIMIT_MAX` in `.env` if needed
 
-You're printing too fast. Wait a minute or increase `RATE_LIMIT_MAX`.
+### Images print without the curved border
+- Update to the latest version -- older versions had a bug where image prints skipped the template border
 
-### Blurry or small prints
-
-Adjust `IMAGE_WIDTH`:
-- 58mm paper: `IMAGE_WIDTH=384`
-- 80mm paper: `IMAGE_WIDTH=512`
-
-### Docker container won't start
-
-1. Make sure Docker is running
-2. Check logs: `docker logs escpos-printify`
-3. Verify port 3000 is free: `lsof -i :3000`
-
-### Web interface shows error
-
-1. Check if server is running
-2. Open browser console (F12) for error details
-3. Check server logs for errors
+### Printed text shows `&#x27;` instead of apostrophes
+- Fixed in v2.0. Update to the latest version
 
 ---
 
-## 🤝 Contributing
+## License
 
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing`)
-5. Open a Pull Request
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-Made with ❤️ by Kumara Venkata
+MIT

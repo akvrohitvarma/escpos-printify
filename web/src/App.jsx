@@ -1,7 +1,6 @@
 import { useState, useRef, useMemo, useEffect } from 'react'
 import { getSudoku } from 'sudoku-gen'
 import QRCode from 'qrcode'
-import floydSteinberg from 'floyd-steinberg'
 import dayjs from 'dayjs'
 import './index.css'
 
@@ -63,7 +62,6 @@ const templates = {
       const showFlag = data.flagType !== 'none' && flagText
       const qrDataUrl = extra?.reminderQrDataUrl || ''
       const printedAt = dayjs().format('DD-MMM-YYYY • h:mm A')
-      // Format the finish by date and time for display
       const formattedFinishDate = data.finishByDate ? dayjs(data.finishByDate).format('DD-MMM-YYYY') : ''
       const formattedFinishTime = data.finishByTime ? dayjs(`2000-01-01 ${data.finishByTime}`).format('h:mm A') : ''
 
@@ -142,7 +140,7 @@ const templates = {
           <h2 style="margin: 0 0 15px; font-size: 36px; font-weight: bold;">Sudoku Puzzle</h2>
           <p style="margin: 0 0 20px; font-size: 20px;">Difficulty: ${data.difficulty.toUpperCase()}</p>
           ${renderGrid(puzzle, 45, 28)}
-          
+
           <div style="margin-top: 30px; padding-top: 20px; border-top: 2px dashed #000;">
             <p style="margin: 0 0 15px; font-size: 20px; font-weight: bold;">✂️ Solution</p>
             ${renderGrid(solution, 35, 20)}
@@ -156,27 +154,20 @@ const templates = {
     icon: '📱',
     fields: [
       { name: 'qrType', label: 'QR Type', type: 'select', options: ['url', 'text', 'email', 'sms', 'wifi', 'vcard'], default: 'url' },
-      // URL fields
       { name: 'url', label: 'URL', type: 'text', default: 'https://example.com', showWhen: 'url' },
-      // Text fields
       { name: 'text', label: 'Text Message', type: 'textarea', default: 'Hello World!', showWhen: 'text' },
-      // Email fields
       { name: 'emailTo', label: 'Email Address', type: 'text', default: 'example@email.com', showWhen: 'email' },
       { name: 'emailSubject', label: 'Subject', type: 'text', default: 'Hello', showWhen: 'email' },
       { name: 'emailBody', label: 'Body', type: 'textarea', default: 'Message content...', showWhen: 'email' },
-      // SMS fields
       { name: 'smsPhone', label: 'Phone Number', type: 'text', default: '+1234567890', showWhen: 'sms' },
       { name: 'smsMessage', label: 'Message', type: 'textarea', default: 'Hello!', showWhen: 'sms' },
-      // WiFi fields
       { name: 'wifiSSID', label: 'Network Name (SSID)', type: 'text', default: 'MyNetwork', showWhen: 'wifi' },
       { name: 'wifiPassword', label: 'Password', type: 'text', default: '', showWhen: 'wifi' },
       { name: 'wifiSecurity', label: 'Security', type: 'select', options: ['WPA', 'WEP', 'nopass'], default: 'WPA', showWhen: 'wifi' },
-      // vCard fields
       { name: 'vcardName', label: 'Full Name', type: 'text', default: 'John Doe', showWhen: 'vcard' },
       { name: 'vcardPhone', label: 'Phone', type: 'text', default: '+1234567890', showWhen: 'vcard' },
       { name: 'vcardEmail', label: 'Email', type: 'text', default: 'john@example.com', showWhen: 'vcard' },
       { name: 'vcardOrg', label: 'Organization', type: 'text', default: '', showWhen: 'vcard' },
-      // Common
       { name: 'label', label: 'Label (optional)', type: 'text', default: '' }
     ],
     render: (data, extra) => {
@@ -228,22 +219,71 @@ const templates = {
   }
 }
 
+// Helper to build fetch headers (includes API key if set)
+function buildHeaders(apiKey) {
+  const headers = { 'Content-Type': 'application/json' }
+  if (apiKey) headers['x-api-key'] = apiKey
+  return headers
+}
+
 function App() {
   const [selectedTemplate, setSelectedTemplate] = useState('postit')
   const [formData, setFormData] = useState({})
   const [printing, setPrinting] = useState(false)
   const [printAnimation, setPrintAnimation] = useState(false)
   const [message, setMessage] = useState(null)
-  const [sudokuSeed, setSudokuSeed] = useState(0) // For regenerating puzzle
+  const [sudokuSeed, setSudokuSeed] = useState(0)
   const [qrDataUrl, setQrDataUrl] = useState('')
   const [reminderQrDataUrl, setReminderQrDataUrl] = useState('')
   const [imageDataUrl, setImageDataUrl] = useState('')
   const previewRef = useRef(null)
   const fileInputRef = useRef(null)
 
+  // Settings
+  const [apiKey, setApiKey] = useState(() => localStorage.getItem('apiKey') || '')
+  const [showSettings, setShowSettings] = useState(false)
+
+  // USB printer state
+  const [printerType, setPrinterType] = useState('network') // 'network' or 'usb'
+  const [usbPrinters, setUsbPrinters] = useState([])
+  const [selectedUsb, setSelectedUsb] = useState(null)
+  const [usbSupported, setUsbSupported] = useState(false)
+
   const template = templates[selectedTemplate]
 
-  // Generate Sudoku puzzle (memoized, changes when seed or difficulty changes)
+  // Fetch server config on mount
+  useEffect(() => {
+    fetch('/config')
+      .then(r => r.json())
+      .then(cfg => {
+        setUsbSupported(cfg.usbSupported)
+      })
+      .catch(() => {})
+  }, [])
+
+  // Fetch USB printers when USB mode selected
+  useEffect(() => {
+    if (printerType === 'usb' && usbSupported) {
+      const headers = buildHeaders(apiKey)
+      fetch('/printers/usb', { headers })
+        .then(r => r.json())
+        .then(data => {
+          setUsbPrinters(data.printers || [])
+          if (data.printers?.length > 0 && !selectedUsb) {
+            setSelectedUsb(data.printers[0])
+          }
+        })
+        .catch(() => setUsbPrinters([]))
+    }
+  }, [printerType, usbSupported, apiKey])
+
+  // Persist API key
+  useEffect(() => {
+    if (apiKey) localStorage.setItem('apiKey', apiKey)
+    else localStorage.removeItem('apiKey')
+  }, [apiKey])
+
+  // Generate Sudoku puzzle
   const sudokuData = useMemo(() => {
     const difficulty = formData['sudoku_difficulty'] || 'medium'
     const validDifficulty = ['easy', 'medium', 'hard', 'expert'].includes(difficulty) ? difficulty : 'medium'
@@ -253,38 +293,19 @@ function App() {
   // Generate QR code content based on type
   const getQrContent = () => {
     const qrType = formData['qrcode_qrType'] || 'url'
-
     switch (qrType) {
-      case 'url':
-        return formData['qrcode_url'] || 'https://example.com'
-      case 'text':
-        return formData['qrcode_text'] || 'Hello World!'
+      case 'url': return formData['qrcode_url'] || 'https://example.com'
+      case 'text': return formData['qrcode_text'] || 'Hello World!'
       case 'email': {
         const to = formData['qrcode_emailTo'] || 'example@email.com'
         const subject = formData['qrcode_emailSubject'] || ''
         const body = formData['qrcode_emailBody'] || ''
         return `mailto:${to}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
       }
-      case 'sms': {
-        const phone = formData['qrcode_smsPhone'] || ''
-        const message = formData['qrcode_smsMessage'] || ''
-        return `sms:${phone}?body=${encodeURIComponent(message)}`
-      }
-      case 'wifi': {
-        const ssid = formData['qrcode_wifiSSID'] || 'MyNetwork'
-        const password = formData['qrcode_wifiPassword'] || ''
-        const security = formData['qrcode_wifiSecurity'] || 'WPA'
-        return `WIFI:T:${security};S:${ssid};P:${password};;`
-      }
-      case 'vcard': {
-        const name = formData['qrcode_vcardName'] || 'John Doe'
-        const phone = formData['qrcode_vcardPhone'] || ''
-        const email = formData['qrcode_vcardEmail'] || ''
-        const org = formData['qrcode_vcardOrg'] || ''
-        return `BEGIN:VCARD\nVERSION:3.0\nN:${name}\nFN:${name}\nTEL:${phone}\nEMAIL:${email}\nORG:${org}\nEND:VCARD`
-      }
-      default:
-        return 'https://example.com'
+      case 'sms': return `sms:${formData['qrcode_smsPhone'] || ''}?body=${encodeURIComponent(formData['qrcode_smsMessage'] || '')}`
+      case 'wifi': return `WIFI:T:${formData['qrcode_wifiSecurity'] || 'WPA'};S:${formData['qrcode_wifiSSID'] || 'MyNetwork'};P:${formData['qrcode_wifiPassword'] || ''};;`
+      case 'vcard': return `BEGIN:VCARD\nVERSION:3.0\nN:${formData['qrcode_vcardName'] || 'John Doe'}\nFN:${formData['qrcode_vcardName'] || 'John Doe'}\nTEL:${formData['qrcode_vcardPhone'] || ''}\nEMAIL:${formData['qrcode_vcardEmail'] || ''}\nORG:${formData['qrcode_vcardOrg'] || ''}\nEND:VCARD`
+      default: return 'https://example.com'
     }
   }
 
@@ -309,26 +330,8 @@ function App() {
         .catch(err => console.error('Reminder QR generation error:', err))
     }
   }, [formData['reminder_showQrCode'], formData['reminder_qrUrl']])
-  // Floyd-Steinberg dithering using the floyd-steinberg npm package
-  const applyFloydSteinbergDither = (ctx, width, height) => {
-    const imageData = ctx.getImageData(0, 0, width, height)
-    const data = imageData.data
 
-    // Convert to grayscale and boost brightness (thermal prints darker)
-    for (let i = 0; i < data.length; i += 4) {
-      // Grayscale using luminance formula
-      let gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2]
-      // Boost brightness and lift shadows (balanced)
-      gray = Math.min(255, gray * 1.3 + 20)
-      data[i] = data[i + 1] = data[i + 2] = gray
-    }
-
-    // Apply Floyd-Steinberg dithering using the package
-    const dithered = floydSteinberg(imageData)
-    ctx.putImageData(dithered, 0, 0)
-  }
-
-  // Handle image file upload with 512px resize and dithering
+  // Handle image file upload with 512px resize
   const handleImageUpload = (e) => {
     const file = e.target.files?.[0]
     if (!file) return
@@ -337,20 +340,13 @@ function App() {
     reader.onload = (event) => {
       const img = new Image()
       img.onload = () => {
-        // Resize to 512px width, maintaining aspect ratio
         const canvas = document.createElement('canvas')
         const width = 512
         const height = Math.round((img.height / img.width) * 512)
         canvas.width = width
         canvas.height = height
         const ctx = canvas.getContext('2d')
-
-        // Draw original image
         ctx.drawImage(img, 0, 0, width, height)
-
-        // Apply Floyd-Steinberg dithering for thermal printer
-        applyFloydSteinbergDither(ctx, width, height)
-
         setImageDataUrl(canvas.toDataURL('image/png'))
       }
       img.src = event.target.result
@@ -370,49 +366,30 @@ function App() {
   // Get rendered HTML (handles special templates)
   const getRenderedHtml = () => {
     const data = getData()
-    if (selectedTemplate === 'sudoku') {
-      return template.render(data, sudokuData)
-    }
-    if (selectedTemplate === 'qrcode') {
-      return template.render(data, { qrDataUrl })
-    }
-    if (selectedTemplate === 'image') {
-      return template.render(data, { imageDataUrl })
-    }
-    if (selectedTemplate === 'reminder') {
-      return template.render(data, { reminderQrDataUrl })
-    }
+    if (selectedTemplate === 'sudoku') return template.render(data, sudokuData)
+    if (selectedTemplate === 'qrcode') return template.render(data, { qrDataUrl })
+    if (selectedTemplate === 'image') return template.render(data, { imageDataUrl })
+    if (selectedTemplate === 'reminder') return template.render(data, { reminderQrDataUrl })
     return template.render(data)
   }
 
   const handleFieldChange = (fieldName, value) => {
-    setFormData(prev => ({
-      ...prev,
-      [`${selectedTemplate}_${fieldName}`]: value
-    }))
+    setFormData(prev => ({ ...prev, [`${selectedTemplate}_${fieldName}`]: value }))
   }
 
-  const regenerateSudoku = () => {
-    setSudokuSeed(prev => prev + 1)
-  }
+  const regenerateSudoku = () => setSudokuSeed(prev => prev + 1)
 
   // Build structured JSON payload for printing
   const getPrintPayload = () => {
     const data = getData()
     const payload = { template: selectedTemplate }
 
-    // Helper to build qrData object from form fields
     const buildQrData = (prefix = 'qrcode') => {
       const qrType = formData[`${prefix}_qrType`] || 'url'
       const qrData = {}
-
       switch (qrType) {
-        case 'url':
-          qrData.url = formData[`${prefix}_url`] || 'https://example.com'
-          break
-        case 'text':
-          qrData.text = formData[`${prefix}_text`] || ''
-          break
+        case 'url': qrData.url = formData[`${prefix}_url`] || 'https://example.com'; break
+        case 'text': qrData.text = formData[`${prefix}_text`] || ''; break
         case 'email':
           qrData.to = formData[`${prefix}_emailTo`] || ''
           qrData.subject = formData[`${prefix}_emailSubject`] || ''
@@ -437,51 +414,46 @@ function App() {
       return { qrType, qrData }
     }
 
+    // Add printer override if USB
+    if (printerType === 'usb' && selectedUsb) {
+      payload.printer = {
+        type: 'usb',
+        vendorId: selectedUsb.vendorId,
+        productId: selectedUsb.productId,
+      }
+    }
+
     switch (selectedTemplate) {
       case 'postit':
         return { ...payload, title: data.title, body: data.message }
-
       case 'grocery':
         return { ...payload, title: data.title, items: data.items.split('\n').filter(i => i.trim()) }
-
       case 'reminder': {
         const reminderPayload = {
-          ...payload,
-          title: data.title,
-          body: data.description,
-          flag: data.flagType,
-          customFlag: data.customFlag,
-          showPrintedAt: data.showPrintedAt,
-          showFinishBy: data.showFinishBy,
-          finishByDate: data.finishByDate,
-          finishByTime: data.finishByTime,
-          showQrCode: data.showQrCode
+          ...payload, title: data.title, body: data.description,
+          flag: data.flagType, customFlag: data.customFlag,
+          showPrintedAt: data.showPrintedAt, showFinishBy: data.showFinishBy,
+          finishByDate: data.finishByDate, finishByTime: data.finishByTime,
+          showQrCode: data.showQrCode,
         }
-        // Add QR data if QR code is enabled
         if (data.showQrCode) {
           reminderPayload.qrType = 'url'
           reminderPayload.qrData = { url: data.qrUrl || 'https://example.com' }
         }
         return reminderPayload
       }
-
       case 'tictactoe':
         return payload
-
       case 'sudoku':
         return { ...payload, difficulty: data.difficulty, puzzle: sudokuData.puzzle, solution: sudokuData.solution }
-
       case 'qrcode': {
         const { qrType, qrData } = buildQrData('qrcode')
         return { ...payload, qrLabel: data.label, qrType, qrData }
       }
-
       case 'image':
         return { ...payload, image: imageDataUrl, caption: data.caption }
-
       case 'banner':
         return { ...payload, title: data.text, fontSize: data.fontSize }
-
       default:
         return payload
     }
@@ -495,23 +467,22 @@ function App() {
       const payload = getPrintPayload()
       const response = await fetch('/print', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        headers: buildHeaders(apiKey),
+        body: JSON.stringify(payload),
       })
 
       const result = await response.json()
       if (result.success) {
-        // Trigger print animation
         setPrintAnimation(true)
         setTimeout(() => {
           setPrintAnimation(false)
-          setMessage({ type: 'success', text: '✅ Printed successfully!' })
+          setMessage({ type: 'success', text: 'Printed successfully!' })
         }, 1500)
       } else {
-        setMessage({ type: 'error', text: `❌ ${result.error}` })
+        setMessage({ type: 'error', text: result.error })
       }
     } catch (err) {
-      setMessage({ type: 'error', text: `❌ ${err.message}` })
+      setMessage({ type: 'error', text: err.message })
     }
 
     setPrinting(false)
@@ -526,9 +497,85 @@ function App() {
             <span className="text-2xl">🖨️</span>
             ESC/POS Printify
           </h1>
-          <span className="text-xs text-white/50">Receipt Printer Made Easy</span>
+          <div className="flex items-center gap-3">
+            <span className="text-xs text-white/50">Receipt Printer Made Easy</span>
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 transition-all text-sm"
+              title="Settings"
+            >
+              ⚙️
+            </button>
+          </div>
         </div>
       </header>
+
+      {/* Settings Panel (collapsible) */}
+      {showSettings && (
+        <div className="max-w-7xl mx-auto px-4 pt-3">
+          <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 space-y-3">
+            <h2 className="text-sm font-semibold">Settings</h2>
+
+            {/* API Key */}
+            <div>
+              <label className="block text-sm text-white/70 mb-1">API Key (optional)</label>
+              <input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder="Leave empty if not configured on server"
+                className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+              />
+            </div>
+
+            {/* Printer Type */}
+            <div>
+              <label className="block text-sm text-white/70 mb-1">Printer Connection</label>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setPrinterType('network')}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm transition-all ${printerType === 'network' ? 'bg-purple-600 border-purple-500' : 'bg-white/10 border-white/20'} border`}
+                >
+                  🌐 Network (LAN)
+                </button>
+                <button
+                  onClick={() => setPrinterType('usb')}
+                  disabled={!usbSupported}
+                  className={`flex-1 py-2 px-3 rounded-lg text-sm transition-all ${printerType === 'usb' ? 'bg-purple-600 border-purple-500' : 'bg-white/10 border-white/20'} border disabled:opacity-30 disabled:cursor-not-allowed`}
+                  title={usbSupported ? 'Use USB-connected printer' : 'USB not available on this server'}
+                >
+                  🔌 USB
+                </button>
+              </div>
+            </div>
+
+            {/* USB Printer Selector */}
+            {printerType === 'usb' && usbSupported && (
+              <div>
+                <label className="block text-sm text-white/70 mb-1">USB Printer</label>
+                {usbPrinters.length > 0 ? (
+                  <select
+                    value={selectedUsb ? `${selectedUsb.vendorId}:${selectedUsb.productId}` : ''}
+                    onChange={(e) => {
+                      const [vid, pid] = e.target.value.split(':').map(Number)
+                      setSelectedUsb(usbPrinters.find(p => p.vendorId === vid && p.productId === pid))
+                    }}
+                    className="w-full bg-white/10 border border-white/20 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-purple-500"
+                  >
+                    {usbPrinters.map(p => (
+                      <option key={`${p.vendorId}:${p.productId}`} value={`${p.vendorId}:${p.productId}`} className="bg-slate-800">
+                        {p.product || 'USB Printer'} ({p.vendorId.toString(16)}:{p.productId.toString(16)})
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <p className="text-sm text-white/40">No USB printers detected. Connect a printer and refresh.</p>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="max-w-7xl mx-auto p-4 grid grid-cols-1 lg:grid-cols-2 gap-4">
         {/* Left: Template Selector & Form */}
@@ -560,13 +607,11 @@ function App() {
               <div className="space-y-3">
                 {template.fields
                   .filter(field => {
-                    // Show field if no showWhen condition OR if showWhen matches current qrType/flagType
                     if (field.showWhen) {
                       const currentQrType = formData[`${selectedTemplate}_qrType`] || 'url'
                       const currentFlagType = formData[`${selectedTemplate}_flagType`] || 'important'
                       return field.showWhen === currentQrType || field.showWhen === currentFlagType
                     }
-                    // Handle showWhenChecked - only show when parent checkbox is checked
                     if (field.showWhenChecked) {
                       return formData[`${selectedTemplate}_${field.showWhenChecked}`] === true
                     }
@@ -653,9 +698,19 @@ function App() {
                 {imageDataUrl ? 'Change Image' : 'Browse Image...'}
               </button>
               {imageDataUrl && (
-                <p className="text-xs text-green-400 mt-2 text-center">✅ Image loaded</p>
+                <p className="text-xs text-green-400 mt-2 text-center">Image loaded (dithering applied server-side)</p>
               )}
             </div>
+          )}
+
+          {/* Sudoku Regenerate */}
+          {selectedTemplate === 'sudoku' && (
+            <button
+              onClick={regenerateSudoku}
+              className="w-full py-2 bg-white/10 border border-white/20 rounded-lg hover:bg-white/20 transition-all text-sm"
+            >
+              🔄 Generate New Puzzle
+            </button>
           )}
 
           {/* Print Button */}
@@ -680,29 +735,20 @@ function App() {
           {/* Status Message */}
           {message && (
             <div className={`p-2 rounded-lg text-sm ${message.type === 'success' ? 'bg-green-500/20 border border-green-500/30' : 'bg-red-500/20 border border-red-500/30'}`}>
-              {message.text}
+              {message.type === 'success' ? '✅ ' : '❌ '}{message.text}
             </div>
           )}
         </div>
 
-        {/* Right: Preview - Thermal receipt style (black on white) */}
+        {/* Right: Preview */}
         <div className="bg-white/5 backdrop-blur-sm rounded-xl p-4 border border-white/10 flex flex-col h-[calc(100vh-120px)]">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-sm font-semibold">Preview (512px width)</h2>
-            {selectedTemplate === 'sudoku' && (
-              <button
-                onClick={regenerateSudoku}
-                className="px-2 py-1 bg-purple-600 hover:bg-purple-500 rounded text-xs"
-              >
-                🔄 New Puzzle
-              </button>
-            )}
           </div>
           <div
             className="bg-gray-200 rounded-lg shadow-2xl mx-auto flex-1 overflow-hidden relative"
             style={{ width: '512px', maxWidth: '100%' }}
           >
-            {/* Scrollable preview container */}
             <div className="absolute inset-0 overflow-y-auto">
               <div
                 ref={previewRef}
@@ -724,4 +770,3 @@ function App() {
 }
 
 export default App
-

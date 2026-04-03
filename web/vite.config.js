@@ -7,7 +7,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/print': 'http://localhost:3000',
-      '/health': 'http://localhost:3000'
+      '/preview': 'http://localhost:3000',
+      '/health': 'http://localhost:3000',
+      '/config': 'http://localhost:3000',
+      '/printers': 'http://localhost:3000'
     }
   }
 })

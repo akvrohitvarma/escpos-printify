@@ -1,5 +1,5 @@
 # ESC/POS Printify - Docker Compose
-# 
+#
 # Quick start:
 #   1. Edit PRINTER_HOST below to match your printer's IP
 #   2. Run: docker compose up -d
@@ -27,9 +27,17 @@ services:
       - PRINTER_TIMEOUT=10000
       - RATE_LIMIT_MAX=30
       - RATE_LIMIT_WINDOW=60000
+      - MAX_CONCURRENT_RENDERS=3
+      # Security (optional)
+      # - API_KEY=your-secret-key-here
+      # - CORS_ORIGINS=http://localhost:3000
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
-      start_period: 15s
+      start_period: 10s
+    # Uncomment below for USB printer support (Linux hosts only)
+    # devices:
+    #   - /dev/bus/usb:/dev/bus/usb
+    # privileged: true

@@ -1,6 +1,8 @@
-# Test JSON Payloads for ESC/POS Print Server
+# Test JSON Payloads for ESC/POS Printify
 
 Use these with: `curl -X POST http://localhost:3000/print -H "Content-Type: application/json" -d '<json>'`
+
+If API key is configured: add `-H "x-api-key: your-key"`
 
 ---
 
@@ -60,44 +62,41 @@ curl -X POST http://localhost:3000/print \
   -d '{"template":"qrcode","qrType":"vcard","qrLabel":"My Contact","qrData":{"name":"John Doe","phone":"+1234567890","email":"john@example.com","org":"Acme Inc"}}'
 ```
 
-## 9. QR Code - Email
-```bash
-curl -X POST http://localhost:3000/print \
-  -H "Content-Type: application/json" \
-  -d '{"template":"qrcode","qrType":"email","qrLabel":"Email Us","qrData":{"to":"support@example.com","subject":"Hello","body":"I have a question"}}'
-```
-
-## 10. QR Code - SMS
-```bash
-curl -X POST http://localhost:3000/print \
-  -H "Content-Type: application/json" \
-  -d '{"template":"qrcode","qrType":"sms","qrLabel":"Text Us","qrData":{"phone":"+1234567890","message":"Hello!"}}'
-```
-
-## 11. Tic Tac Toe
+## 9. Tic Tac Toe
 ```bash
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{"template":"tictactoe"}'
 ```
 
-## 12. Multiple Copies
+## 10. Multiple Copies
 ```bash
 curl -X POST http://localhost:3000/print \
   -H "Content-Type: application/json" \
   -d '{"template":"postit","title":"Batch Print","body":"3 copies!","copies":3}'
 ```
 
-## 13. Health Check
+## 11. Preview (returns PNG, no printing)
+```bash
+curl -X POST http://localhost:3000/preview \
+  -H "Content-Type: application/json" \
+  -d '{"template":"postit","title":"Preview Test","body":"This returns a PNG image"}' \
+  --output preview.png
+```
+
+## 12. Health Check
 ```bash
 curl http://localhost:3000/health
 ```
 
+## 13. List USB Printers
+```bash
+curl http://localhost:3000/printers/usb
+```
+
 ---
 
-## JSON Schema Reference
-
-### QR Data Fields by Type
+## QR Data Fields by Type
 
 | Type | qrData Fields |
 |------|---------------|
